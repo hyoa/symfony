@@ -1,0 +1,171 @@
+<?php
+
+namespace Symfony\Component\DependencyInjection\Loader\Configurator;
+
+use Symfony\Component\Messenger\Bridge\AmazonSqs\Transport\AmazonSqsTransportFactory;
+use Symfony\Component\Messenger\Bridge\Amqp\Transport\AmqpTransportFactory;
+use Symfony\Component\Messenger\Bridge\Redis\Transport\RedisTransportFactory;
+use Symfony\Component\Messenger\EventListener\DispatchPcntlSignalListener;
+use Symfony\Component\Messenger\EventListener\SendFailedMessageForRetryListener;
+use Symfony\Component\Messenger\EventListener\SendFailedMessageToFailureTransportListener;
+use Symfony\Component\Messenger\EventListener\StopWorkerOnRestartSignalListener;
+use Symfony\Component\Messenger\EventListener\StopWorkerOnSigtermSignalListener;
+use Symfony\Component\Messenger\Middleware\AddBusNameStampMiddleware;
+use Symfony\Component\Messenger\Middleware\DispatchAfterCurrentBusMiddleware;
+use Symfony\Component\Messenger\Middleware\FailedMessageProcessingMiddleware;
+use Symfony\Component\Messenger\Middleware\HandleMessageMiddleware;
+use Symfony\Component\Messenger\Middleware\RejectRedeliveredMessageMiddleware;
+use Symfony\Component\Messenger\Middleware\SendMessageMiddleware;
+use Symfony\Component\Messenger\Middleware\TraceableMiddleware;
+use Symfony\Component\Messenger\Middleware\ValidationMiddleware;
+use Symfony\Component\Messenger\Retry\MultiplierRetryStrategy;
+use Symfony\Component\Messenger\RoutableMessageBus;
+use Symfony\Component\Messenger\Transport\InMemoryTransportFactory;
+use Symfony\Component\Messenger\Transport\Sender\SendersLocator;
+use Symfony\Component\Messenger\Transport\Serialization\PhpSerializer;
+use Symfony\Component\Messenger\Transport\Serialization\Serializer;
+use Symfony\Component\Messenger\Transport\Serialization\SerializerInterface;
+use Symfony\Component\Messenger\Transport\Sync\SyncTransportFactory;
+use Symfony\Component\Messenger\Transport\TransportFactory;
+
+return static function (ContainerConfigurator $container) {
+    $container->services()
+        // Asynchronous
+        ->set('messenger.senders_locator', SendersLocator::class)
+            ->args([
+                [], // Per message senders map,
+                '', // senders service locator
+            ])
+        ->set('messenger.middleware.send_message', SendMessageMiddleware::class)
+            ->args([
+                service('messenger.senders_locator'),
+                service('event_dispatcher'),
+            ])
+            ->call('setLogger', [service('logger')->ignoreOnInvalid()])
+            ->tag('monolog.logger', ['channel' => 'messenger'])
+
+        // Message encoding/decoding
+        ->set('messenger.transport.symfony_serializer', Serializer::class)
+            ->args([
+                service('serializer'),
+                '', // Format
+                [], // Context
+            ])
+        ->alias(SerializerInterface::class, 'messenger.default_serializer')
+
+        ->set('messenger.transport.native_php_serializer', PhpSerializer::class)
+
+        // Middleware
+        ->set('messenger.middleware.handle_message', HandleMessageMiddleware::class)
+            ->abstract()
+            ->args([
+                '', // Bus handler resolver
+            ])
+            ->tag('monolog.logger', ['channel' => 'messenger'])
+            ->call('setLogger', [service('logger')->ignoreOnInvalid()])
+
+        ->set('messenger.middleware.add_bus_name_stamp_middleware', AddBusNameStampMiddleware::class)
+            ->abstract()
+
+        ->set('messenger.middleware.dispatch_after_current_bus', DispatchAfterCurrentBusMiddleware::class)
+
+        ->set('messenger.middleware.validation', ValidationMiddleware::class)
+            ->args([
+                service('validator'),
+            ])
+
+        ->set('messenger.middleware.reject_redelivered_message_middleware', RejectRedeliveredMessageMiddleware::class)
+
+        ->set('messenger.middleware.failed_message_processing_middleware', FailedMessageProcessingMiddleware::class)
+
+        ->set('messenger.middleware.traceable', TraceableMiddleware::class)
+            ->abstract()
+            ->args([
+                service('debug.stopwatch'),
+            ])
+
+        // Discovery
+        ->set('messenger.receiver_locator')
+            ->args([
+                [],
+            ])
+            ->tag('container.service_locator')
+
+        // Transports
+        ->set('messenger.transport_factory', TransportFactory::class)
+            ->args([
+                tagged_iterator('messenger.transport_factory'),
+            ])
+
+        ->set('messenger.transport.amqp.factory', AmqpTransportFactory::class)
+
+        ->set('messenger.transport.redis.factory', RedisTransportFactory::class)
+
+        ->set('messenger.transport.sync.factory', SyncTransportFactory::class)
+            ->args([
+                service('messenger.routable_message_bus'),
+            ])
+            ->tag('messenger.transport_factory')
+
+        ->set('messenger.transport.in_memory.factory', InMemoryTransportFactory::class)
+            ->tag('messenger.transport_factory')
+            ->tag('kernel.reset', ['method' => 'reset'])
+
+        ->set('messenger.transport.sqs.factory', AmazonSqsTransportFactory::class)
+
+        // retry
+        ->set('messenger.retry_strategy_locator')
+            ->args([
+                [],
+            ])
+            ->tag('container.service_locator')
+
+        ->set('messenger.retry.abstract_multiplier_retry_strategy', MultiplierRetryStrategy::class)
+            ->abstract()
+            ->args([
+                '', // max retries
+                '', // delay ms
+                '', // multiplier
+                '', // max delay ms
+            ])
+
+        // worker event listener
+        ->set('messenger.retry.send_failed_message_for_retry_listener', SendFailedMessageForRetryListener::class)
+            ->args([
+                '', // senders service locator
+                service('messenger.retry_strategy_locator'),
+                service('logger')->ignoreOnInvalid(),
+            ])
+            ->tag('kernel.event_subscriber')
+            ->tag('monolog.logger', ['channel' => 'messenger'])
+
+        ->set('messenger.failure.send_failed_message_to_failure_transport_listener', SendFailedMessageToFailureTransportListener::class)
+            ->args([
+                '',// Failure transport
+                service('logger')->ignoreOnInvalid(),
+            ])
+            ->tag('kernel.event_subscriber')
+            ->tag('monolog.logger', ['channel' => 'messenger'])
+
+        ->set('messenger.listener.dispatch_pcntl_signal_listener', DispatchPcntlSignalListener::class)
+            ->tag('kernel.event_subscriber')
+
+        ->set('messenger.listener.stop_worker_on_restart_signal_listener', StopWorkerOnRestartSignalListener::class)
+            ->args([
+                service('cache.messenger.restart_workers_signal'),
+                service('logger')->ignoreOnInvalid(),
+            ])
+            ->tag('kernel.event_subscriber')
+            ->tag('monolog.logger', ['channel' => 'messenger'])
+
+        ->set('messenger.listener.stop_worker_on_sigterm_signal_listener', StopWorkerOnSigtermSignalListener::class)
+            ->tag('kernel.event_subscriber')
+
+        ->set('messenger.routable_message_bus', RoutableMessageBus::class)
+            ->args([
+                '', // Message bus locator
+                service('messenger.default_bus'),
+            ])
+    ;
+
+};

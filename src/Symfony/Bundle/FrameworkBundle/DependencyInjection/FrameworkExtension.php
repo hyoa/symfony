@@ -319,7 +319,7 @@ class FrameworkExtension extends Extension
         }
 
         if ($this->messengerConfigEnabled = $this->isConfigEnabled($container, $config['messenger'])) {
-            $this->registerMessengerConfiguration($config['messenger'], $container, $loader, $config['validation']);
+            $this->registerMessengerConfiguration($config['messenger'], $container, $loader, $config['validation'], $phpLoader);
         } else {
             $container->removeDefinition('console.command.messenger_consume_messages');
             $container->removeDefinition('console.command.messenger_debug');
@@ -596,7 +596,7 @@ class FrameworkExtension extends Extension
         }
 
         if ($this->messengerConfigEnabled) {
-            $loader->load('messenger_debug.xml');
+            $phpLoader->load('messenger_debug.php');
         }
 
         if ($this->mailerConfigEnabled) {
@@ -1629,13 +1629,13 @@ class FrameworkExtension extends Extension
         }
     }
 
-    private function registerMessengerConfiguration(array $config, ContainerBuilder $container, XmlFileLoader $loader, array $validationConfig)
+    private function registerMessengerConfiguration(array $config, ContainerBuilder $container, XmlFileLoader $loader, array $validationConfig, PhpFileLoader $phpLoader)
     {
         if (!interface_exists(MessageBusInterface::class)) {
             throw new LogicException('Messenger support cannot be enabled as the Messenger component is not installed. Try running "composer require symfony/messenger".');
         }
 
-        $loader->load('messenger.xml');
+        $phpLoader->load('messenger.php');
 
         if (class_exists(AmqpTransportFactory::class)) {
             $container->getDefinition('messenger.transport.amqp.factory')->addTag('messenger.transport_factory');
