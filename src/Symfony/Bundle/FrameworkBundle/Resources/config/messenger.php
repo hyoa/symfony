@@ -43,7 +43,7 @@ return static function (ContainerConfigurator $container) {
         ->set('messenger.senders_locator', SendersLocator::class)
             ->args([
                 [], // Per message senders map,
-                '', // senders service locator
+                abstract_arg('senders service locator'), // senders service locator
             ])
         ->set('messenger.middleware.send_message', SendMessageMiddleware::class)
             ->args([
@@ -57,7 +57,7 @@ return static function (ContainerConfigurator $container) {
         ->set('messenger.transport.symfony_serializer', Serializer::class)
             ->args([
                 service('serializer'),
-                '', // Format
+                abstract_arg('format'),
                 [], // Context
             ])
         ->alias(SerializerInterface::class, 'messenger.default_serializer')
@@ -68,7 +68,7 @@ return static function (ContainerConfigurator $container) {
         ->set('messenger.middleware.handle_message', HandleMessageMiddleware::class)
             ->abstract()
             ->args([
-                '', // Bus handler resolver
+                abstract_arg('bus handler resolver'),
             ])
             ->tag('monolog.logger', ['channel' => 'messenger'])
             ->call('setLogger', [service('logger')->ignoreOnInvalid()])
@@ -132,16 +132,16 @@ return static function (ContainerConfigurator $container) {
         ->set('messenger.retry.abstract_multiplier_retry_strategy', MultiplierRetryStrategy::class)
             ->abstract()
             ->args([
-                '', // max retries
-                '', // delay ms
-                '', // multiplier
-                '', // max delay ms
+                abstract_arg('max retries'),
+                abstract_arg('delay ms'),
+                abstract_arg('multiplier'),
+                abstract_arg('max delay ms'),
             ])
 
         // worker event listener
         ->set('messenger.retry.send_failed_message_for_retry_listener', SendFailedMessageForRetryListener::class)
             ->args([
-                '', // senders service locator
+                abstract_arg('senders service locator'),
                 service('messenger.retry_strategy_locator'),
                 service('logger')->ignoreOnInvalid(),
             ])
@@ -150,7 +150,7 @@ return static function (ContainerConfigurator $container) {
 
         ->set('messenger.failure.send_failed_message_to_failure_transport_listener', SendFailedMessageToFailureTransportListener::class)
             ->args([
-                '', // Failure transport
+                abstract_arg('failure transport'),
                 service('logger')->ignoreOnInvalid(),
             ])
             ->tag('kernel.event_subscriber')
@@ -172,7 +172,7 @@ return static function (ContainerConfigurator $container) {
 
         ->set('messenger.routable_message_bus', RoutableMessageBus::class)
             ->args([
-                '', // Message bus locator
+                abstract_arg('message bus locator'),
                 service('messenger.default_bus'),
             ])
     ;
