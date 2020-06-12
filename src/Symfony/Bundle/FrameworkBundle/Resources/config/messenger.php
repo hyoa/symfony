@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony package.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
+
 namespace Symfony\Component\DependencyInjection\Loader\Configurator;
 
 use Symfony\Component\Messenger\Bridge\AmazonSqs\Transport\AmazonSqsTransportFactory;
@@ -141,7 +150,7 @@ return static function (ContainerConfigurator $container) {
 
         ->set('messenger.failure.send_failed_message_to_failure_transport_listener', SendFailedMessageToFailureTransportListener::class)
             ->args([
-                '',// Failure transport
+                '', // Failure transport
                 service('logger')->ignoreOnInvalid(),
             ])
             ->tag('kernel.event_subscriber')
@@ -167,5 +176,4 @@ return static function (ContainerConfigurator $container) {
                 service('messenger.default_bus'),
             ])
     ;
-
 };
