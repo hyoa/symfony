@@ -60,7 +60,7 @@ return static function (ContainerConfigurator $container) {
                 abstract_arg('format'),
                 [], // Context
             ])
-        ->alias(SerializerInterface::class, 'messenger.default_serializer')
+        ->alias(SerializerInterface::class, 'messenger.default_serializer')->private()
 
         ->set('messenger.transport.native_php_serializer', PhpSerializer::class)
 
